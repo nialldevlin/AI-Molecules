@@ -1,0 +1,48 @@
+import torch
+import torch.nn as nn
+
+class CNN_RNN(nn.Module):
+    def __init__(self, input_channels=250, encoder_out_channels=128, rnn_hidden_size=128,
+                 decoder_out_channels=250, output_height=3, output_width=3,
+                 encoder_kernel_size=(3, 3), encoder_stride=2, encoder_padding=1,
+                 encoder_pool_kernel_size=(2, 2), encoder_pool_stride=2):
+        super(CNN_RNN, self).__init__()
+        # Encoder CNN
+        self.encoder_cnn = nn.Sequential(
+            nn.Conv2d(in_channels=input_channels, out_channels=encoder_out_channels,
+                      kernel_size=encoder_kernel_size, stride=encoder_stride, padding=encoder_padding),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=encoder_pool_kernel_size, stride=encoder_pool_stride)
+        )
+        self.intermediate_size = 128  # To be dynamically set
+        # RNN for temporal processing
+        self.rnn = nn.GRU(input_size=128, hidden_size=rnn_hidden_size, num_layers=1, batch_first=True)
+        # Decoder CNN to reconstruct the desired output shape
+        self.decoder_cnn = nn.Sequential(
+            nn.ConvTranspose2d(in_channels=rnn_hidden_size, out_channels=input_channels,
+                               kernel_size=encoder_kernel_size, stride=encoder_stride,
+                               padding=encoder_padding, output_padding=encoder_padding),
+            nn.Tanh()  # Use Tanh or another activation function as needed
+        )
+        self.output_channels = decoder_out_channels
+        self.output_height = output_height
+        self.output_width = output_width
+
+    def forward(self, x):
+        batch_size, seq_len, C, H, W = x.size()
+        if self.intermediate_size is None:
+            with torch.no_grad():
+                sample_output = self.encoder_cnn(x[:, 0, :, :, :])
+                self.intermediate_size = sample_output.view(batch_size, -1).shape[1]
+                self.rnn.input_size = self.intermediate_size
+
+        cnn_encoded = torch.zeros(batch_size, seq_len, self.intermediate_size).to(x.device)
+        for t in range(seq_len):
+            cnn_t = self.encoder_cnn(x[:, t, :, :, :]).view(batch_size, -1)
+            cnn_encoded[:, t, :] = cnn_t
+
+        rnn_out, _ = self.rnn(cnn_encoded)
+        last_rnn_output = rnn_out[:, -1, :].view(batch_size, -1, 1, 1)
+        last_rnn_output = nn.functional.interpolate(last_rnn_output, size=(self.output_height*2, self.output_width*2))
+        output = self.decoder_cnn(last_rnn_output)
+        return output

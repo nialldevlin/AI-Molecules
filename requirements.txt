@@ -1,0 +1,3 @@
+Numpy
+Pytorch
+Pytorch-Geometric
