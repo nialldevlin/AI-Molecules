@@ -47,7 +47,7 @@ def loadXDATCAR(filename, separator="Direct configuration="):
     return (data, header)
 
 
-def _format_float(self, f):
+def _format_float(f):
     """Formats a float to a string with 8 decimal places.
 
     This internal method ensures that floats are formatted consistently with

@@ -7,8 +7,9 @@ from torch_geometric.data import Data, DataLoader
 from torch.utils.data import Dataset
 from scipy.spatial import cKDTree
 # Ensure this module is prepared to handle 3D inputs
-from graph_vae_2 import GraphVAE
+from graph_vae import GraphVAE
 from load_poscar import MoleculeFrames
+import os
 
 
 class GraphDataset(Dataset):
@@ -59,8 +60,10 @@ def train(model, data_loader, optimizer, epochs=20):
         print(f"Epoch {epoch}, Loss: {total_loss / len(data_loader)}")
 
 
-# Example usage
-mf = MoleculeFrames('MG_data', 12)
+# Replace the path with the relative path to your data
+current_dir = os.path.dirname(__file__)
+data_dir = os.path.join(current_dir, '../../data/MG_ND_POSCAR')
+mf = MoleculeFrames(data_dir, 12)
 dataset = GraphDataset(mf.data, num_neighbors=12)
 data_loader = DataLoader(dataset, batch_size=10, shuffle=True)
 

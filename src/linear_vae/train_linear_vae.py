@@ -4,9 +4,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
+import os
 
-from load_data import DataHandler, VAEMoleculeDataset
+# from linear_vae import LinearVAE
 from conv_vae import ConvVAE
+
+from load_data import *
 
 # Data parameters
 batch_size = 8
@@ -21,6 +24,7 @@ latent_dim = 256
 learning_rate = 0.0001
 epochs = 100
 
+# model_save_path = "linear_vae.pth"
 model_save_path = "conv_vae.pth"
 
 # Check if GPU is available and use it; otherwise, use CPU
@@ -29,14 +33,18 @@ print(f"Using device: {device}")
 
 print("Loading data")
 
-filename = 'current_train/XDATCAR'
+# Replace the path with the relative path to your data
+current_dir = os.path.dirname(__file__)
+filename = os.path.join(current_dir, '../../data/ti-.004cu_2500k_0.0/XDATCAR')
 
-data = DataHandler(filename, train_split, flatten=True, transpose=False)
+data, header = loadXDATCAR(filename)
 
-train_dataset = VAEMoleculeDataset(data.train_data)
+train_dataset = LinearVAEMoleculeDataset(data)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
+# 750 is the number of data points in a single feature, in this case 1 timestep
 print("Creating model")
+# model = LinearVAE(device, 750)
 model = ConvVAE(device, 750)
 model.to(device)  # Move the model to GPU
 
@@ -92,27 +100,43 @@ train(model, optimizer, epochs=epochs, device=device)
 
 model.eval()
 
-print("Predicting")
-x = train_dataset[0]
-xt = torch.tensor(x, dtype=torch.float32).unsqueeze(0).to(device)
-with torch.no_grad():
-    xp, mean, logvar = model(xt)
-    xn = xp.squeeze().cpu().numpy()
+# Uncomment this to validate on existing data
 
-print("Saving to XDATCAR")
-xnr = data.unNormalizeFeature(xn)
-xr = data.unNormalizeFeature(x)
-data.toXDATCAR(np.array(xnr), "vae/Predicted/XDATCAR")
-data.toXDATCAR(np.array(xr), "vae/Actual/XDATCAR")
+# print("Predicting")
+# actual_sample = train_dataset[0]
+# actual_tensor = torch.tensor(
+#     actual_sample, dtype=torch.float32).unsqueeze(0).to(device)
+# with torch.no_grad():
+#     predicted_tensor, mean, logvar = model(actual_tensor)
+#     predicted_sample = predicted_tensor.squeeze().cpu().numpy()
+
+# print("Saving to XDATCAR")
+# predicted_normalized = train_dataset.unNormalizeFeatures(predicted_sample)
+# actual_normalized = train_dataset.unNormalizeFeatures(actual_sample)
+
+# if not os.path.exists('predicted'):
+#     os.makedirs('predicted')
+# if not os.path.exists('actual'):
+#     os.makedirs('actual')
+
+# toXDATCAR("predicted/XDATCAR", np.array(predicted_normalized), header)
+# toXDATCAR("actual/XDATCAR", np.array(actual_normalized), header)
 
 
-# def generate(mean, var):
-#     z_sample = torch.tensor([[mean, var]], dtype=torch.float).to(device)
-#     x_decoded = model.decode(z_sample)
-#     return x_decoded.detach().cpu()
+print('Generating')
 
 
-# nf = generate(0.0, 1.0)
+def generate(mean, var):
+    z_sample = torch.tensor([[mean, var]], dtype=torch.float).to(device)
+    x_decoded = model.decode(z_sample)
+    return x_decoded.detach().cpu()
 
-# nfr = data.unNormalizeFeatures(nf)
-# data.toXDATCAR(nfr, "vae/XDATCAR")
+
+generated_sample = generate(0.0, 1.0)
+
+generated_normalized = train_dataset.unNormalizeFeatures(generated_sample)
+
+if not os.path.exists('generated'):
+    os.makedirs('generated')
+
+toXDATCAR("generated/XDATCAR", np.array(generated_normalized), header)
